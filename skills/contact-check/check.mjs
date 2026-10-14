@@ -8,7 +8,7 @@
 // Prints one JSON object. Exit codes, so scripts can gate on the result:
 //   0  ok_to_email (send, with a footer that meets footer_text), or the check is switched off
 //   2  do not send: consent_needed, blocked or unknown
-//   3  check unavailable: network error, daily limit, bad key (try again later)
+//   3  check unavailable: network error, daily limit, bad key or an unexpected response (try again later)
 //   1  usage error
 //
 // Env: PRECLEARED_SENDER_COUNTRY (GB or US). The check is off until this is set.
@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 const API_URL = process.env.PRECLEARED_API_URL || "https://precleared.dev/api/v1/check";
 const SOURCES = ["published", "bought", "scraped", "given", "unknown"];
 const SENDERS = ["GB", "US"];
+const VERDICTS = ["ok_to_email", "consent_needed", "blocked", "unknown"];
 const TIMEOUT_MS = 30000;
 
 export function parseArgs(argv) {
@@ -68,31 +69,37 @@ export function buildPayload(opts, sender) {
   return payload;
 }
 
+const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
 export function summarise(status, body) {
-  if (status === 200 && body && body.verdict) {
-    const reason = Array.isArray(body.reasons) && body.reasons[0] ? body.reasons[0] : {};
+  // Only a JSON object with a known verdict counts as an answer. Anything else means the check
+  // could not be made (exit 3), so a stray response is never read as a verdict.
+  if (status === 200 && isObject(body) && VERDICTS.includes(body.verdict)) {
+    const first = Array.isArray(body.reasons) ? body.reasons[0] : null;
+    const reason = isObject(first) ? first : {};
     return {
       exitCode: body.verdict === "ok_to_email" ? 0 : 2,
       result: {
         verdict: body.verdict,
         send: body.verdict === "ok_to_email",
-        rule: reason.text || reason.note || null,
-        source: reason.source_title || null,
-        footer_text: body.footer_text || null,
-        next_step: body.next_step || null,
-        receipt_id: body.receipt && body.receipt.id ? body.receipt.id : null,
+        rule: text(reason.text) || text(reason.note),
+        source: text(reason.source_title),
+        footer_text: text(body.footer_text),
+        next_step: text(body.next_step),
+        receipt_id: isObject(body.receipt) ? text(body.receipt.id) : null,
       },
     };
   }
-  const error = body && typeof body === "object" ? body : {};
+  const error = isObject(body) ? body : {};
   return {
     exitCode: 3,
     result: {
       verdict: null,
       send: false,
-      error: error.error || `http_${status}`,
-      message: error.message || "Precleared could not answer. Do not send; try again later.",
-      get_key_url: error.get_key_url || null,
+      error: text(error.error) || (status === 200 ? "unexpected_response" : `http_${status}`),
+      message: text(error.message) || "Precleared could not answer. Do not send; try again later.",
+      get_key_url: text(error.get_key_url),
     },
   };
 }

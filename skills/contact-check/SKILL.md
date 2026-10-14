@@ -5,7 +5,7 @@ description: "Check whether a cold email to one address is allowed (UK, US, Cana
 
 # contact-check — Cold Email Permission Check
 
-> Before the Day 1 email to a new address, ask whether a cold email to that buyer is allowed. Germany and France want prior consent in many cases, a UK sole trader counts as an individual, and Canada's CASL depends on whether the address was published. One call per address, before the first email.
+> Before the Day 1 email to a new address, ask whether a cold email to that buyer is allowed. Germany and France want prior consent in many cases, a UK sole trader counts as an individual, and Canada's CASL depends on whether the address was published. One call per address, before the first email, and again if the pitch or where you got the address changes.
 
 Powered by [Precleared](https://precleared.dev): a per-address verdict under UK PECR and UK GDPR, US CAN-SPAM, Canada's CASL, Germany's UWG and France's rules, with the rule quoted and a signed receipt. Nothing is sent to the buyer.
 
@@ -41,7 +41,7 @@ The script prints one JSON object and exits with a code you can gate on:
 |------|---------|------------|
 | `0` | `ok_to_email`, or the check is off | Send the sequence. The footer must meet `footer_text` (who you are, a postal address, a way to opt out). It describes the requirement; write it in your own words |
 | `2` | `consent_needed`, `blocked` or `unknown` | Do not email. Follow `next_step` (for example, get consent through their contact form or a channel the buyer opened) and note it in the CRM |
-| `3` | none | The check could not be made (network, daily limit). Do not email yet; try again later |
+| `3` | none | The check could not be made (network, daily limit, an unexpected response). Do not email that lead yet: try again on the next run and carry on with replies and other leads |
 
 Always save `receipt_id` in the CRM notes next to the lead. Anyone can open the receipt at `https://precleared.dev/r/<receipt_id>` to see what was checked and why.
 
