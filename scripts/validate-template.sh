@@ -26,6 +26,7 @@ for file in \
   workspace/MEMORY.md workspace/HEARTBEAT.md workspace/TOOLS.md \
   deploy/config.sh.example deploy/deploy.sh deploy/doctor.sh deploy/generate-config.sh deploy/skill-profiles.sh \
   skills/chroma-memory/SKILL.md skills/chroma-memory/chroma.mjs \
+  skills/contact-check/SKILL.md skills/contact-check/check.mjs \
   product-kb/catalog.json product-kb/scripts/generate-pi.js
 do
   require_file "$file"
@@ -62,6 +63,16 @@ OPENCLAW_HOME="$TMP_DIR/openclaw" node "$ROOT/skills/chroma-memory/chroma.mjs" s
   --limit 1 > "$TMP_DIR/chroma-search.json"
 jq -e 'length == 1 and .[0].has_quote == true and .[0].has_commitment == true' "$TMP_DIR/chroma-search.json" >/dev/null
 pass "Chroma memory smoke test works"
+
+node --check "$ROOT/skills/contact-check/check.mjs"
+env -u PRECLEARED_SENDER_COUNTRY node "$ROOT/skills/contact-check/check.mjs" --email buyer@example.de --source published > "$TMP_DIR/contact-check-off.json"
+jq -e '.skipped == true and .send == true' "$TMP_DIR/contact-check-off.json" >/dev/null
+node "$ROOT/skills/contact-check/check.mjs" --email buyer@example.de --source published --country de --sender GB --dry-run > "$TMP_DIR/contact-check.json"
+jq -e '.dry_run == true and .payload.address_source == "published" and .payload.recipient_country == "DE" and .payload.sender_country == "GB"' "$TMP_DIR/contact-check.json" >/dev/null
+if node "$ROOT/skills/contact-check/check.mjs" --email buyer@example.de --source guessed --sender GB > /dev/null; then
+  fail "contact-check accepted an invalid --source"
+fi
+pass "Contact check skill parses and builds requests"
 
 source "$ROOT/deploy/skill-profiles.sh"
 skill_list="$(get_skills_for_profile b2b_trade) chromadb"
