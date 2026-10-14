@@ -74,6 +74,21 @@ if node "$ROOT/skills/contact-check/check.mjs" --email buyer@example.de --source
 fi
 pass "Contact check skill parses and builds requests"
 
+CONTACT_CHECK="$ROOT/skills/contact-check/check.mjs" node --input-type=module -e '
+import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
+const { summarise } = await import(pathToFileURL(process.env.CONTACT_CHECK).href);
+for (const body of [[], "ok_to_email", null, { verdict: "maybe" }, { reasons: [] }]) {
+  assert.equal(summarise(200, body).exitCode, 3);
+}
+const odd = summarise(200, { verdict: "consent_needed", reasons: { text: "x" }, next_step: 5, receipt: "cc_rcpt_X" });
+assert.equal(odd.exitCode, 2);
+assert.deepEqual([odd.result.rule, odd.result.next_step, odd.result.receipt_id], [null, null, null]);
+assert.equal(summarise(200, { verdict: "ok_to_email", receipt: { id: "cc_rcpt_X" } }).result.receipt_id, "cc_rcpt_X");
+assert.equal(summarise(429, { error: "daily_limit" }).result.error, "daily_limit");
+'
+pass "Contact check treats unexpected responses as unavailable"
+
 source "$ROOT/deploy/skill-profiles.sh"
 skill_list="$(get_skills_for_profile b2b_trade) chromadb"
 skill_count="$(printf '%s\n' $skill_list | sort -u | wc -l | tr -d ' ')"
